@@ -1,0 +1,376 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'FastFood EKS Cluster Infrastructure'
+
+Parameters:
+  EnvironmentName:
+    Description: Environment (dev, staging, prod)
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  ClusterName:
+    Description: Name of the EKS cluster
+    Type: String
+    Default: fastfood-eks-cluster
+
+  KubernetesVersion:
+    Description: Kubernetes version for the EKS cluster
+    Type: String
+    Default: '1.29'
+
+  VpcCIDR:
+    Description: CIDR block for the VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  InstanceType:
+    Description: EC2 instance type for EKS worker nodes
+    Type: String
+    Default: t3.medium
+
+  NodeDesiredCapacity:
+    Description: Desired number of worker nodes
+    Type: Number
+    Default: 3
+
+  NodeMinSize:
+    Description: Minimum number of worker nodes
+    Type: Number
+    Default: 2
+
+  NodeMaxSize:
+    Description: Maximum number of worker nodes
+    Type: Number
+    Default: 6
+
+Resources:
+  # VPC
+  FastFoodVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: fastfood-vpc
+        - Key: Project
+          Value: FastFood
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: fastfood-igw
+        - Key: Project
+          Value: FastFood
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref FastFoodVPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: fastfood-public-subnet-1
+        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+          Value: shared
+        - Key: "kubernetes.io/role/elb"
+          Value: "1"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: fastfood-public-subnet-2
+        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+          Value: shared
+        - Key: "kubernetes.io/role/elb"
+          Value: "1"
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: fastfood-private-subnet-1
+        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+          Value: shared
+        - Key: "kubernetes.io/role/internal-elb"
+          Value: "1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: fastfood-private-subnet-2
+        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+          Value: shared
+        - Key: "kubernetes.io/role/internal-elb"
+          Value: "1"
+
+  # NAT Gateway
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: fastfood-nat-eip
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: fastfood-nat-gw
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      Tags:
+        - Key: Name
+          Value: fastfood-public-rt
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref FastFoodVPC
+      Tags:
+        - Key: Name
+          Value: fastfood-private-rt
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # Security Groups
+  EksClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EKS control plane
+      VpcId: !Ref FastFoodVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: fastfood-eks-cluster-sg
+
+  EksNodesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EKS worker nodes
+      VpcId: !Ref FastFoodVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: fastfood-eks-nodes-sg
+
+  # Adiciono esta regra como um recurso separado para evitar a dependência circular
+  NodesInternalCommunication:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow nodes to communicate with each other
+      GroupId: !Ref EksNodesSecurityGroup
+      SourceSecurityGroupId: !Ref EksNodesSecurityGroup
+      IpProtocol: tcp
+      FromPort: 0
+      ToPort: 65535
+
+  ClusterToNodesSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow cluster to communicate with nodes
+      GroupId: !Ref EksNodesSecurityGroup
+      SourceSecurityGroupId: !Ref EksClusterSecurityGroup
+      IpProtocol: tcp
+      FromPort: 1025
+      ToPort: 65535
+
+  NodesToClusterSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow nodes to communicate with the cluster API
+      GroupId: !Ref EksClusterSecurityGroup
+      SourceSecurityGroupId: !Ref EksNodesSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+
+  # IAM Roles
+  EksClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ClusterName}-cluster-role-${AWS::StackName}"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+
+  EksNodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: fastfood-eks-node-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+
+  # EKS Cluster
+  EksCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref ClusterName
+      Version: !Ref KubernetesVersion
+      RoleArn: !GetAtt EksClusterRole.Arn
+      ResourcesVpcConfig:
+        SecurityGroupIds:
+          - !Ref EksClusterSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        EndpointPrivateAccess: true
+        EndpointPublicAccess: true
+
+  # EKS Node Group
+  EksNodeGroup:
+    Type: AWS::EKS::Nodegroup
+    DependsOn: EksCluster
+    Properties:
+      ClusterName: !Ref ClusterName
+      NodegroupName: fastfood-app-node-group
+      NodeRole: !GetAtt EksNodeRole.Arn
+      InstanceTypes:
+        - !Ref InstanceType
+      ScalingConfig:
+        DesiredSize: !Ref NodeDesiredCapacity
+        MinSize: !Ref NodeMinSize
+        MaxSize: !Ref NodeMaxSize
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        Name: fastfood-app-nodes
+
+Outputs:
+  ClusterName:
+    Description: The name of the EKS cluster
+    Value: !Ref EksCluster
+
+  ClusterEndpoint:
+    Description: The endpoint for Kubernetes API server
+    Value: !GetAtt EksCluster.Endpoint
+
+  ClusterArn:
+    Description: The ARN of the EKS cluster
+    Value: !GetAtt EksCluster.Arn
+
+  NodeGroupId:
+    Description: The ID of the EKS node group
+    Value: !Ref EksNodeGroup
+
+  VpcId:
+    Description: The ID of the VPC
+    Value: !Ref FastFoodVPC
+
+  PublicSubnets:
+    Description: The IDs of the public subnets
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+
+  PrivateSubnets:
+    Description: The IDs of the private subnets
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+
+  KubeconfigCommand:
+    Description: Command to configure kubectl
+    Value: !Sub "aws eks update-kubeconfig --name ${ClusterName} --region ${AWS::Region}"
