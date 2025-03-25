@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace/namespace.yaml
+  - storage/mysql-pvc.yaml
+  - database/mysql-deployment.yaml
+  - database/mysql-service.yaml
+  - application/fastfood-deployment.yaml
+  - application/api-service.yaml
+  - application/hpa.yaml
+  - config/configmap.yaml
+  - config/secret.yaml

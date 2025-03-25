@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fastfood-config
+  labels:
+    app: fastfood
+data:
+  SPRING_PROFILES_ACTIVE: "dev"
+  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-svc:3306/fastfood_db?useSSL=false&allowPublicKeyRetrieval=true"
+  SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+  DATABASE_DIALECT: "org.hibernate.dialect.MySQLDialect"
+  SERVER_PORT: "8080"
+  TZ: "America/Sao_Paulo"

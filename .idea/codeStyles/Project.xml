@@ -1,0 +1,16 @@
+<component name="ProjectCodeStyleConfiguration">
+  <code_scheme name="Project" version="173">
+    <JavaCodeStyleSettings>
+      <option name="INSERT_INNER_CLASS_IMPORTS" value="true" />
+      <option name="PACKAGES_TO_USE_IMPORT_ON_DEMAND">
+        <value>
+          <package name="java.awt" withSubpackages="false" static="true" />
+          <package name="javax.swing" withSubpackages="false" static="true" />
+        </value>
+      </option>
+    </JavaCodeStyleSettings>
+    <ScalaCodeStyleSettings>
+      <option name="MULTILINE_STRING_CLOSING_QUOTES_ON_NEW_LINE" value="true" />
+    </ScalaCodeStyleSettings>
+  </code_scheme>
+</component>

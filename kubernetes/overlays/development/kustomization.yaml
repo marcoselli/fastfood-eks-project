@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: fastfood-development
+
+commonLabels:
+  environment: development
+
+# Configuração de réplicas para ambiente de desenvolvimento
+replicas:
+  - name: fastfood-api
+    count: 1  # Reduzido para economizar recursos em desenvolvimento
