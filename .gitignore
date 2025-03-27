@@ -2,3 +2,4 @@
 /infrastructure/terraform/.terraform.lock.hcl
 /infrastructure/terraform/terraform.tfstate
 /infrastructure/terraform/terraform.tfstate.backup
+**/.terraform/*
