@@ -1,0 +1,9 @@
+region              = "us-east-1"
+environment         = "dev"
+cluster_name        = "fastfood-eks-cluster"
+kubernetes_version  = "1.27"
+vpc_cidr            = "10.0.0.0/16"
+instance_type       = "t3.medium"
+node_desired_capacity = 3
+node_min_size       = 2
+node_max_size       = 6
