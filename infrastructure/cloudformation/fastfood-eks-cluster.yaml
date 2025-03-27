@@ -19,7 +19,7 @@ Parameters:
   KubernetesVersion:
     Description: Kubernetes version for the EKS cluster
     Type: String
-    Default: '1.29'
+    Default: '1.27'
 
   VpcCIDR:
     Description: CIDR block for the VPC
@@ -93,7 +93,7 @@ Resources:
       Tags:
         - Key: Name
           Value: fastfood-public-subnet-1
-        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+        - Key: !Sub "kubernetes.io/cluster/${ClusterName}"
           Value: shared
         - Key: "kubernetes.io/role/elb"
           Value: "1"
@@ -108,7 +108,7 @@ Resources:
       Tags:
         - Key: Name
           Value: fastfood-public-subnet-2
-        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+        - Key: !Sub "kubernetes.io/cluster/${ClusterName}"
           Value: shared
         - Key: "kubernetes.io/role/elb"
           Value: "1"
@@ -123,7 +123,7 @@ Resources:
       Tags:
         - Key: Name
           Value: fastfood-private-subnet-1
-        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+        - Key: !Sub "kubernetes.io/cluster/${ClusterName}"
           Value: shared
         - Key: "kubernetes.io/role/internal-elb"
           Value: "1"
@@ -137,7 +137,7 @@ Resources:
       Tags:
         - Key: Name
           Value: fastfood-private-subnet-2
-        - Key: "kubernetes.io/cluster/fastfood-eks-cluster"
+        - Key: !Sub "kubernetes.io/cluster/${ClusterName}"
           Value: shared
         - Key: "kubernetes.io/role/internal-elb"
           Value: "1"
@@ -273,7 +273,7 @@ Resources:
       FromPort: 443
       ToPort: 443
 
-  # IAM Roles
+  # IAM Roles with corrected names and additional policies
   EksClusterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -287,11 +287,12 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - arn:aws:iam::aws:policy/AmazonEKSVPCResourceController
 
   EksNodeRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: fastfood-eks-node-role
+      RoleName: !Sub "${ClusterName}-node-role-${AWS::StackName}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -303,6 +304,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
 
   # EKS Cluster
   EksCluster:
@@ -321,15 +323,32 @@ Resources:
           - !Ref PrivateSubnet2
         EndpointPrivateAccess: true
         EndpointPublicAccess: true
+      Tags:
+        - Key: Name
+          Value: !Ref ClusterName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Create EBS CSI Driver Add-on
+  EbsCsiDriverAddon:
+    Type: AWS::EKS::Addon
+    Properties:
+      AddonName: aws-ebs-csi-driver
+      ClusterName: !Ref EksCluster
+      AddonVersion: v1.23.0-eksbuild.1
+      ResolveConflicts: OVERWRITE
+    DependsOn: EksNodeGroup
 
   # EKS Node Group
   EksNodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn: EksCluster
     Properties:
       ClusterName: !Ref ClusterName
-      NodegroupName: fastfood-app-node-group
+      NodegroupName: !Sub "${ClusterName}-node-group"
       NodeRole: !GetAtt EksNodeRole.Arn
+      AmiType: AL2_x86_64
+      CapacityType: ON_DEMAND
+      DiskSize: 20
       InstanceTypes:
         - !Ref InstanceType
       ScalingConfig:
@@ -340,7 +359,9 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        Name: fastfood-app-nodes
+        Name: !Sub "${ClusterName}-nodes"
+        Environment: !Ref EnvironmentName
+    DependsOn: EksCluster
 
 Outputs:
   ClusterName:
@@ -374,3 +395,7 @@ Outputs:
   KubeconfigCommand:
     Description: Command to configure kubectl
     Value: !Sub "aws eks update-kubeconfig --name ${ClusterName} --region ${AWS::Region}"
+
+  NodeGroupInstanceRole:
+    Description: The IAM role for the Node Group instances
+    Value: !GetAtt EksNodeRole.Arn

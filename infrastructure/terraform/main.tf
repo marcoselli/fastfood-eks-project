@@ -293,6 +293,43 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
   role       = aws_iam_role.eks_node_role.name
 }
 
+# Criar política de permissão para EBS
+resource "aws_iam_policy" "eks_ebs_access_policy" {
+  name        = "EKSEBSAccessPolicy"
+  description = "Allow EKS nodes to manage EBS volumes"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateVolume",
+          "ec2:DeleteVolume",
+          "ec2:AttachVolume",
+          "ec2:DetachVolume",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumeStatus",
+          "ec2:DescribeVolumeAttribute",
+          "ec2:CreateSnapshot",
+          "ec2:DeleteSnapshot",
+          "ec2:DescribeSnapshots",
+          "ec2:CreateTags",
+          "ec2:DeleteTags",
+          "ec2:DescribeTags"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Anexar a política ao role do nó
+resource "aws_iam_role_policy_attachment" "eks_ebs_access" {
+  role       = aws_iam_role.eks_node_role.name
+  policy_arn = aws_iam_policy.eks_ebs_access_policy.arn
+}
+
 # EKS Cluster
 resource "aws_eks_cluster" "eks_cluster" {
   name     = var.cluster_name

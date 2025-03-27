@@ -3,11 +3,16 @@ kind: Kustomization
 
 resources:
   - namespace/namespace.yaml
+  - config/configmap.yaml
+  - config/secret.yaml
   - storage/mysql-pvc.yaml
   - database/mysql-deployment.yaml
   - database/mysql-service.yaml
   - application/fastfood-deployment.yaml
   - application/api-service.yaml
   - application/hpa.yaml
-  - config/configmap.yaml
-  - config/secret.yaml
+
+namespace: fastfood
+
+commonLabels:
+  part-of: fastfood-app

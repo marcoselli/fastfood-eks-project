@@ -11,7 +11,7 @@ GIT_REPO_URL="git@github.com:marcoselli/fastfood-eks-project.git"
 SSH_KEY_PATH="$HOME/.ssh/id_ed25519_almeida_devops_042"
 EMAIL="almeidadevops042@gmail.com"
 BRANCH="eduardo/infraestrutura-terraform-tech"
-COMMIT_MESSAGE="wip - infraestrutura terraform tech challenger"
+COMMIT_MESSAGE="create cluster EKS - infraestructure terraform com sucesso e ajustes em .yaml para apply dos resources do k8s"
 
 git@github.com:marcoselli/fastfood-eks-project.git
 
